@@ -38,6 +38,9 @@
   .empty { text-align: center; padding: 3rem 1rem; color: #555; font-size: 14px; }
   .last-updated { font-size: 11px; color: #444; text-align: center; margin-top: 1.5rem; }
   .refresh-note { font-size: 12px; color: #555; text-align: center; margin-top: 8px; line-height: 1.5; }
+  .btn-save { background: transparent; border: none; color: #555; font-size: 18px; cursor: pointer; padding: 0 0 0 6px; line-height: 1; flex-shrink: 0; -webkit-tap-highlight-color: transparent; }
+  .btn-save.saved { color: #f5a623; }
+  .count { font-size: 11px; background: #2a2a2a; border-radius: 99px; padding: 1px 6px; color: #888; margin-left: 3px; }
 </style>
 </head>
 <body>
@@ -56,6 +59,7 @@
     <button class="tab" onclick="switchTab('sat')">Sat 7/25</button>
     <button class="tab" onclick="switchTab('sun')">Sun 7/26</button>
     <button class="tab" onclick="switchTab('tba')">TBA</button>
+    <button class="tab" onclick="switchTab('saved')">Saved <span class="count" id="saved-count">0</span></button>
     <button class="tab" onclick="switchTab('search')">Search</button>
   </div>
 
@@ -66,6 +70,11 @@
   <div id="tab-sat" class="section"></div>
   <div id="tab-sun" class="section"></div>
   <div id="tab-tba" class="section"></div>
+
+  <div id="tab-saved" class="section">
+    <p style="font-size:14px;color:#666;margin-bottom:1.25rem;line-height:1.6;">Your saved signings. Tap ★ on any signing to save it here.</p>
+    <div id="saved-list"></div>
+  </div>
 
   <div id="tab-search" class="section">
     <div class="search-wrap">
@@ -338,17 +347,65 @@ const DAY_LABELS = {
 };
 
 let lastRefreshed = new Date();
+let saved = new Set(JSON.parse(localStorage.getItem('sdcc-saved')||'[]'));
 
-function signingHTML(s) {
+function toggleSave(id, btn) {
+  if (saved.has(id)) { saved.delete(id); } else { saved.add(id); }
+  localStorage.setItem('sdcc-saved', JSON.stringify([...saved]));
+  renderSaved();
+  updateSavedCount();
+  // Update all buttons with this id
+  document.querySelectorAll('.btn-save').forEach(b => {
+    if (b.getAttribute('onclick') && b.getAttribute('onclick').includes("'" + id + "'")) {
+      b.textContent = saved.has(id) ? '★' : '☆';
+      b.classList.toggle('saved', saved.has(id));
+    }
+  });
+}
+
+function updateSavedCount() {
+  document.getElementById('saved-count').textContent = saved.size;
+}
+
+function renderSaved() {
+  const el = document.getElementById('saved-list');
+  if (!saved.size) { el.innerHTML = '<div class="empty">No saved signings yet. Tap ☆ on any signing to save it here.</div>'; return; }
+  // Collect all saved signings in day order
+  const results = [];
+  ['wed','thu','fri','sat','sun','tba'].forEach(day => {
+    (SIGNINGS[day]||[]).forEach(s => {
+      if (saved.has(signingId(s))) results.push({...s, day});
+    });
+  });
+  if (!results.length) { el.innerHTML = '<div class="empty">No saved signings found.</div>'; return; }
+  // Group by day
+  const byDay = {};
+  results.forEach(r => { if(!byDay[r.day])byDay[r.day]=[]; byDay[r.day].push(r); });
+  el.innerHTML = Object.entries(byDay).map(([day, items]) => {
+    const {label, date} = DAY_LABELS[day];
+    return `<div class="day-block"><div class="day-header"><span>${label}</span><span class="day-date">${date}</span></div>${items.map(s => signingHTML(s, false)).join('')}</div>`;
+  }).join('');
+}
+
+function signingId(s) {
+  return btoa(unescape(encodeURIComponent((s.creators + s.time + s.location).slice(0,80)))).replace(/[^a-zA-Z0-9]/g,'').slice(0,20);
+}
+
+function signingHTML(s, showDay) {
   const portalBadge = s.portal ? '<span class="badge-section badge-portal">Portal</span>' : '';
   const offsiteBadge = s.offsite ? '<span class="badge-section badge-offsite">Offsite</span>' : '';
+  const id = signingId(s);
+  const isSaved = saved.has(id);
+  const dayLabel = showDay ? `<div style="font-size:10px;color:#555;margin-top:2px;">${DAY_LABELS[s.day]?.label||''} ${DAY_LABELS[s.day]?.date||''}</div>` : '';
   return `<div class="signing-card">
     <div class="signing-time">${s.time}</div>
     <div class="signing-body">
       <div class="signing-creators">${s.creators}${portalBadge}${offsiteBadge}</div>
       <div class="signing-location">${s.location}</div>
       ${s.notes ? `<div class="signing-notes">${s.notes}</div>` : ''}
+      ${dayLabel}
     </div>
+    <button class="btn-save${isSaved?' saved':''}" onclick="toggleSave('${id}',this)" title="${isSaved?'Remove from saved':'Save this signing'}">${isSaved?'★':'☆'}</button>
   </div>`;
 }
 
@@ -357,7 +414,7 @@ function renderDay(dayKey) {
   const {label, date} = DAY_LABELS[dayKey];
   return `<div class="day-block">
     <div class="day-header"><span>${label}</span><span class="day-date">${date}</span></div>
-    ${signings.map(s => signingHTML(s)).join('')}
+    ${signings.map(s => signingHTML(s, false)).join('')}
   </div>`;
 }
 
@@ -367,10 +424,12 @@ function renderAll() {
     document.getElementById('tab-'+d).innerHTML = renderDay(d);
   });
   document.getElementById('updated-time').textContent = 'Last rendered: ' + lastRefreshed.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  renderSaved();
+  updateSavedCount();
 }
 
 function switchTab(name) {
-  const names = ['all','wed','thu','fri','sat','sun','tba','search'];
+  const names = ['all','wed','thu','fri','sat','sun','tba','saved','search'];
   document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i]===name));
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
@@ -393,7 +452,7 @@ function doSearch() {
   results.forEach(r => { if(!byDay[r.day])byDay[r.day]=[]; byDay[r.day].push(r); });
   el.innerHTML = Object.entries(byDay).map(([day, items]) => {
     const {label, date} = DAY_LABELS[day];
-    return `<div class="day-block"><div class="day-header"><span>${label}</span><span class="day-date">${date}</span></div>${items.map(s => signingHTML(s)).join('')}</div>`;
+    return `<div class="day-block"><div class="day-header"><span>${label}</span><span class="day-date">${date}</span></div>${items.map(s => signingHTML(s, false)).join('')}</div>`;
   }).join('');
 }
 
