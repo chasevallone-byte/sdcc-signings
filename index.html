@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SDCC 2026 Signings</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #f0f0f0; min-height: 100vh; }
+  .app { max-width: 720px; margin: 0 auto; padding: 1.25rem 1rem 4rem; }
+  h1 { font-size: 20px; font-weight: 700; margin-bottom: 2px; }
+  .subtitle { font-size: 13px; color: #666; margin-bottom: 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .btn-refresh { font-size: 12px; background: transparent; border: 1px solid #3a3a3a; color: #888; padding: 4px 12px; border-radius: 99px; cursor: pointer; font-family: inherit; }
+  .btn-refresh:hover { border-color: #666; color: #f0f0f0; }
+  .btn-refresh.loading { color: #f5a623; border-color: #f5a623; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid #2a2a2a; margin-bottom: 1.25rem; overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { font-size: 13px; padding: 7px 14px; border: none; background: none; cursor: pointer; color: #888; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; font-family: inherit; font-weight: 500; }
+  .tab.active { color: #f0f0f0; border-bottom-color: #f0f0f0; }
+  .section { display: none; }
+  .section.active { display: block; }
+  .search-wrap { position: relative; margin-bottom: 1rem; }
+  .search-wrap input { width: 100%; background: #1a1a1a; border: 1px solid #2e2e2e; border-radius: 10px; color: #f0f0f0; font-family: inherit; font-size: 15px; padding: 10px 36px 10px 14px; -webkit-appearance: none; }
+  .search-wrap input:focus { outline: none; border-color: #555; }
+  .search-clear { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #555; cursor: pointer; font-size: 16px; }
+  .day-block { margin-bottom: 1.5rem; }
+  .day-header { font-size: 13px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #2a2a2a; display: flex; justify-content: space-between; align-items: center; }
+  .day-date { font-size: 11px; color: #555; font-weight: 400; text-transform: none; letter-spacing: 0; }
+  .signing-card { background: #1a1a1a; border: 1px solid #222; border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 6px; display: flex; gap: 10px; align-items: flex-start; }
+  .signing-time { font-size: 12px; color: #f5a623; font-weight: 600; white-space: nowrap; min-width: 95px; padding-top: 2px; }
+  .signing-body { flex: 1; min-width: 0; }
+  .signing-creators { font-size: 14px; font-weight: 600; color: #f0f0f0; line-height: 1.4; }
+  .signing-location { font-size: 12px; color: #666; margin-top: 3px; }
+  .signing-notes { font-size: 12px; color: #aaa; margin-top: 4px; line-height: 1.4; font-style: italic; }
+  .badge-section { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 99px; font-weight: 600; margin-left: 6px; vertical-align: middle; }
+  .badge-portal { background: #2a1a4a; color: #a78bfa; }
+  .badge-offsite { background: #1a3a1a; color: #4ade80; }
+  .empty { text-align: center; padding: 3rem 1rem; color: #555; font-size: 14px; }
+  .last-updated { font-size: 11px; color: #444; text-align: center; margin-top: 1.5rem; }
+  .refresh-note { font-size: 12px; color: #555; text-align: center; margin-top: 8px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>SDCC 2026 Signings</h1>
+  <div class="subtitle">
+    <span>Artists, Cartoonists &amp; Comic Creators</span>
+    <button class="btn-refresh" id="refresh-btn" onclick="refreshData()">&#8635; Refresh</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('all')">All days</button>
+    <button class="tab" onclick="switchTab('wed')">Wed 7/22</button>
+    <button class="tab" onclick="switchTab('thu')">Thu 7/23</button>
+    <button class="tab" onclick="switchTab('fri')">Fri 7/24</button>
+    <button class="tab" onclick="switchTab('sat')">Sat 7/25</button>
+    <button class="tab" onclick="switchTab('sun')">Sun 7/26</button>
+    <button class="tab" onclick="switchTab('tba')">TBA</button>
+    <button class="tab" onclick="switchTab('search')">Search</button>
+  </div>
+
+  <div id="tab-all" class="section active"></div>
+  <div id="tab-wed" class="section"></div>
+  <div id="tab-thu" class="section"></div>
+  <div id="tab-fri" class="section"></div>
+  <div id="tab-sat" class="section"></div>
+  <div id="tab-sun" class="section"></div>
+  <div id="tab-tba" class="section"></div>
+
+  <div id="tab-search" class="section">
+    <div class="search-wrap">
+      <input type="text" id="search-input" placeholder="Search creators, booths, titles..." oninput="doSearch()" />
+      <button class="search-clear" onclick="clearSearch()">&#10005;</button>
+    </div>
+    <div id="search-results"><div class="empty">Start typing to search signings.</div></div>
+  </div>
+
+  <div class="last-updated" id="updated-time"></div>
+  <div class="refresh-note">Schedules change frequently. Hit Refresh to reload, and always confirm with the booth on-site.</div>
+</div>
+
+<script>
+const SIGNINGS = {
+  wed: [
+    {time:'3pm-5pm',creators:'Patrick Horvath',location:'Now or Never Comics (1055 F Street)',notes:'Beneath the Trees Where Nobody Sees',offsite:true},
+    {time:'5pm-7pm',creators:'Terry Kavanagh & Howard Mackie',location:'247 Comics Booth 1837',notes:'Incarnate, Hell Wrangler'},
+    {time:'5pm-9pm',creators:'Ignition Pavilion',location:'San Diego Wine & Culinary Center (200 Harbor Drive)',notes:'Tini Howard, Jeremy Haun, Jamie S. Rich, Cullen Bunn, John J. Pearson',offsite:true},
+    {time:'6pm-9pm',creators:'David Baron',location:'Artists Alley BB-03',notes:'Batman Who Laughs, Absolute Batman'},
+    {time:'7pm-8pm',creators:'Jimmy Mulligan',location:'Saturday Morning Cards 5633'},
+    {time:'Time TBA',creators:'Tony Daniel',location:"P Dot's Comics 1017",notes:'DC, Teen Titans'},
+    {time:'Time TBA',creators:'Geof Darrow',location:'Flesk 5016',notes:'Shaolin Cowboy'},
+    {time:'Time TBA',creators:'Terry Dodson',location:'Flesk 5019',notes:'Harley Quinn, Uncanny X-Men'},
+    {time:'Time TBA',creators:'Trevor Fernandes-Lenkiewicz',location:'Small Press P-11',notes:'Rise, Area 51'},
+  ],
+  thu: [
+    {time:'9:30am-11:30am',creators:'David Baron',location:'Artists Alley BB-03',notes:'Batman Who Laughs, Absolute Batman'},
+    {time:'9:30am-1pm',creators:'Colleen Doran',location:'National Cartoonists Society 1307',notes:'The Sandman'},
+    {time:'10am-11am',creators:'Justin Giampoli',location:'Artists Alley EE-11',notes:'Westside: Volume 1'},
+    {time:'10am-12pm',creators:'Dan Quintana',location:'Red Hood Comics 705',notes:'Absolute Batman. $30/item, limit 3 per person.'},
+    {time:'10am-11am',creators:'Skottie Young',location:'Image Comics/Skybound Booth 1915',notes:'Limit 5 books per person'},
+    {time:'11am-12pm',creators:'Brian Buccellato & Anderson Carman',location:'247 Comics Booth 1837',notes:'Sons of the Devil, Cyber League Baseball'},
+    {time:'11am-12pm',creators:'Jason Fabok & Geoff Johns',location:'Image Comics/Skybound Booth 1915',notes:'Ghost Machine. Limit 10 books per person.'},
+    {time:'11am-2pm',creators:'Mike Baron',location:'Big Man Comics 1705',notes:'The Punisher'},
+    {time:'11am',creators:'Wendy and Richard Pini',location:'Dark Horse Comics Booth 2615',notes:'ElfQuest'},
+    {time:'11:30am-12:30pm',creators:'Mark Waid',location:'Sails Pavilion AA15',notes:'Kingdom Come, Fantastic Four, Justice League. 2026 Special Guest.'},
+    {time:'12pm-1pm',creators:'Mathew Klickstein',location:'Fantagraphics Booth 1721',notes:'See You At San Diego'},
+    {time:'12pm-12:30pm',creators:'Stephanie Williams',location:'Ignition Press Booth 5531'},
+    {time:'12pm-1pm',creators:'Tini Howard',location:'Ignition Press Booth 5531'},
+    {time:'12:30pm-1:15pm',creators:'Christian Ward',location:'Oni-Lion Forge Booth 1829',notes:'Batman: City of Madness'},
+    {time:'12:30pm-1:30pm',creators:'Selai Balkhi',location:'Sails Pavilion AA16',notes:'Detective Sanazu and the Magic Vest'},
+    {time:'12pm-2:30pm',creators:'Yoichi Nishikawa',location:'Nucleus / Gallery Nucleus Booth 2015',notes:'Studio Ghibli. Must purchase print or book. Limit 5 items.'},
+    {time:'1pm-1:45pm',creators:'Tini Howard',location:'BOOM! Studios Booth 2229'},
+    {time:'1pm-2pm',creators:'Jim Lee & Special Guest',location:'DC Booth 4544',notes:'2026 Special Guest.',portal:true},
+    {time:'1:30pm-2:30pm',creators:"Bryan Lee O'Malley",location:'Oni Press Booth 1829',notes:"Scott Pilgrim. 1 item, +1 with Scott Pilgrim purchase.",portal:true},
+    {time:'1pm-2pm',creators:'Gilbert Hernandez & Briana Loewinsohn',location:'Fantagraphics Booth 1721',notes:'Love & Rockets, Raised By Ghosts'},
+    {time:'2pm-3pm',creators:'Jeremy Haun, Jason A. Hurley, Jamie S. Rich',location:'Ignition Press Booth 5531'},
+    {time:'2pm-5pm',creators:'David Baron',location:'Artists Alley BB-03',notes:'Batman Who Laughs, Absolute Batman'},
+    {time:'2:30pm-3:30pm',creators:'Rafael Grampa',location:"Scott's Collectables Booth 2314",notes:'Batman: Gargoyle of Gotham'},
+    {time:'2:30pm-3:30pm',creators:'LeUyen Pham',location:'Sails Pavilion AA18',notes:'As I Dream of You. 2026 Special Guest.'},
+    {time:'2:30pm-4pm',creators:'Howard Mackie',location:'Sails Pavilion AA13',notes:'Ghost Rider. 2026 Special Guest.'},
+    {time:'3pm-3:45pm',creators:'James Tynion IV & Werther Dell\'edera',location:'BOOM! Studios Booth 2229'},
+    {time:'3pm-4:30pm',creators:"Anderson Carman & MANIX",location:'247 Comics Booth 1837',notes:'Cyber League Baseball'},
+    {time:'3pm-4pm',creators:'Drew Edwards',location:'Sails Pavilion AA12',notes:'Halloween Man'},
+    {time:'3pm-4:30pm',creators:'Ruben Najera',location:'Sails Pavilion AA10',notes:'Calaguerra, TMNT'},
+    {time:'3pm-5pm',creators:'Matthew Rosenberg',location:'Now or Never Comics (1055 F Street)',notes:'If Destruction Be Our Lot, Spawn',offsite:true},
+    {time:'4pm-4:45pm',creators:'Alex Pardee',location:'BOOM! Studios Booth 2229'},
+    {time:'4pm-5pm',creators:'Jim McCann, Joe Eisma, Peter Pantazis',location:'Ignition Press Booth 5531'},
+    {time:'4pm-5pm',creators:'Jason Fabok, Geoff Johns, Lamont Magee, Maytal Zchut',location:'Image Comics/Skybound Booth 1915',notes:'Ghost Machine. Limit 10 books.'},
+    {time:'4pm-5:30pm',creators:'Yael ENIVEL',location:'Sails Pavilion AA16',notes:'The French Elk'},
+    {time:'4pm-5pm',creators:'Dan Quintana',location:"Scott's Collectables Booth 2314",notes:'Cover Artist'},
+    {time:'5pm-6pm',creators:'DC All-Stars',location:'DC Booth 4544',portal:true},
+    {time:'5pm-6pm',creators:'Tristan Jones & Christian Ward',location:'IDW Booth 2729',notes:'Event Horizon'},
+    {time:'5:30pm-6:30pm',creators:'Jonboy Meyers',location:'BOOM! Studios Booth 2229'},
+    {time:'5:30pm-6:30pm',creators:'Michael Walsh',location:"Scott's Collectables Booth 2314",notes:'Exquisite Corpses'},
+    {time:'6:15pm-7pm',creators:'Joey Esposito',location:'BOOM! Studios Booth 2229'},
+    {time:'12pm-8pm',creators:'Ignition Pavilion',location:'San Diego Wine & Culinary Center',notes:'Various Ignition Press creators all day',offsite:true},
+    {time:'Time TBA',creators:'Tony Daniel',location:"P Dot's Comics 1017",notes:'DC, Teen Titans'},
+    {time:'Time TBA',creators:'Geof Darrow',location:'Flesk 5016',notes:'Shaolin Cowboy'},
+    {time:'Time TBA',creators:'Terry Dodson',location:'Flesk 5019',notes:'Harley Quinn, Uncanny X-Men'},
+    {time:'Time TBA',creators:'Brandon T. Snider',location:'Prism Comics Booth 2144',notes:"Supergirl's Family Vacation"},
+    {time:'Offsite TBA',creators:'David Baron (Barcon)',location:'The Field Irish Pub, 544 5th Avenue',offsite:true},
+  ],
+  fri: [
+    {time:'9:30am-11:30am',creators:'David Baron',location:'Artists Alley BB-03',notes:'Batman Who Laughs, Absolute Batman'},
+    {time:'10am-11am',creators:'Rafael Grampa',location:'DC Booth 4544',portal:true},
+    {time:'10am-11am',creators:'Melissa Chan',location:'Fanbase Press O-03',notes:'You Must Take Part in Revolution'},
+    {time:'10am-12pm',creators:'Bob Burden & Philip Nelson',location:'Antarctic Press 2309',notes:'Flaming Carrot, AxiCab'},
+    {time:'10am-12pm',creators:'Dan Quintana',location:'Red Hood Comics 705',notes:'Absolute Batman. $30/item, limit 3 per person.'},
+    {time:'10am-11am',creators:'Skottie Young',location:'Image Comics/Skybound Booth 1915',notes:'Limit 5 books per person'},
+    {time:'11am-12pm',creators:'Todd McFarlane',location:'Sails Pavilion AA02',notes:'Spawn. No phones/cameras. 1 item max.',portal:true},
+    {time:'11am-12:30pm',creators:'Yael ENIVEL',location:'Sails Pavilion AA12',notes:'The French Elk'},
+    {time:'11am-12:30pm',creators:'Howard Mackie & Janice Chiang',location:'247 Comics Booth 1837',notes:'Hell Wrangler. 2026 Special Guest.'},
+    {time:'11am',creators:'Wendy and Richard Pini',location:'Prism Comics Booth 2144',notes:'ElfQuest'},
+    {time:'11am-2pm',creators:'Mike Baron',location:'Big Man Comics 1705',notes:'The Punisher'},
+    {time:'11am-11:45am',creators:'Jeff Lemire',location:'BOOM! Studios Booth 2229'},
+    {time:'11:30am-12:30pm',creators:'Briana Loewinsohn & Thien Pham',location:'Sails Pavilion AA13',notes:'Raised by Ghosts, Family Style'},
+    {time:'11am-12pm',creators:'Shane Portman',location:'Fanbase Press O-03',notes:'Shrub'},
+    {time:'11am-1pm',creators:'Jaime & Gilbert Hernandez, Natalia Hernandez',location:'Fantagraphics Booth 1721',notes:'Love & Rockets'},
+    {time:'12pm-1pm',creators:"Bryan Lee O'Malley",location:'Oni Press Booth 1829',notes:"Scott Pilgrim. 1 item, +1 with Scott Pilgrim purchase.",portal:true},
+    {time:'12pm-12:45pm',creators:'Chuck U',location:'IDW Booth 2729',notes:'Teenage Mutant Ninja Turtles'},
+    {time:'1pm-1:45pm',creators:"James Tynion IV & Werther Dell'edera",location:'BOOM! Studios Booth 2229'},
+    {time:'12pm-1pm',creators:'Dave Wielgosz, Lee Loughridge',location:'Ignition Press Booth 5531'},
+    {time:'12pm-1:45pm',creators:'Kristin Kreuk, Peter Mooney, Eric Putzer',location:'Sails Pavilion AA03',notes:'Black Star. Must buy Black Star at Titan 5537 first.'},
+    {time:'12pm-2pm',creators:'Lisa Burdige & John Hazard',location:'Sails Pavilion AA14',notes:'Background Noise'},
+    {time:'12pm-1:45pm',creators:'Simone Legno',location:'Jazwares 3513',notes:'tokidoki creator'},
+    {time:'12pm-5pm',creators:'Yoichi Nishikawa',location:'Nucleus / Gallery Nucleus Booth 2015',notes:'Studio Ghibli. Must purchase print or book. Limit 5 items.'},
+    {time:'1pm-2pm',creators:'Drew Edwards',location:'Sails Pavilion AA12',notes:'Halloween Man'},
+    {time:'1pm-2pm',creators:'Jonathan Tyler Christopher',location:'CGC 5500'},
+    {time:'1pm-2pm',creators:'Mike Deodato',location:'Keepsake Trading Cards 135',notes:'Ultimate Oz Universe'},
+    {time:'1pm-2pm',creators:'Carol Tyler & Mathew Klickstein',location:'Fantagraphics Booth 1721'},
+    {time:'1:30pm-2:30pm',creators:'Howard Mackie',location:'Sails Pavilion AA15',notes:'Ghost Rider. 2026 Special Guest.'},
+    {time:'2pm',creators:'David M. Booher & Drew Zucker',location:'El Rey Comics 2302',notes:'Canto'},
+    {time:'2pm-3pm',creators:'Leah Williams, Jamie S. Rich',location:'Ignition Press Booth 5531'},
+    {time:'2pm-3pm',creators:"DC's Gotham City",location:'DC Booth 4544',portal:true},
+    {time:'2pm-3pm',creators:'John Pham & Katie Skelly',location:'Fantagraphics Booth 1721'},
+    {time:'2pm-4pm',creators:'Philip Nelson',location:'Antarctic Press 2309',notes:'AxiCab'},
+    {time:'2pm-3pm',creators:'Christian Ward',location:'Image Comics/Skybound Booth 1915',notes:'Batman: City of Madness'},
+    {time:'2pm-5pm',creators:'David Baron',location:'Artists Alley BB-03',notes:'Batman Who Laughs, Absolute Batman'},
+    {time:'2:30pm-3:30pm',creators:'tokitokoro',location:'Neon Ichiban 2314'},
+    {time:'2:30pm-3:30pm',creators:'LeUyen Pham',location:'Sails Pavilion AA16',notes:'Pham-tastic: Worlds of Cartooning'},
+    {time:'2:30pm-4pm',creators:'Mike Baron',location:'Antarctic Press 2309',notes:'Nexus, Badger, The Punisher, The Flash'},
+    {time:'3pm',creators:'Tehani Farr',location:'Stranger Comics 2307',notes:'The Stranger. Limited-edition Collection Card.'},
+    {time:'3pm-4pm',creators:"DC's NEXT LEVEL",location:'DC Booth 4544',portal:true},
+    {time:'3pm-4pm',creators:'Justin Giampoli',location:'Artists Alley EE-11',notes:'Westside: Volume 1'},
+    {time:'3:30pm-4:30pm',creators:'Gene Luen Yang, Julia Wertz, Thien Pham, Briana Loewinsohn',location:'Sails Pavilion AA07',notes:'Creating and Maintaining Your Comics Community'},
+    {time:'3:30pm-5pm',creators:'Nathan Fillion, Soo Lee & Heath Corson',location:"Scott's Collectables Booth 2314",notes:'Witness Point. Limited signed copies.'},
+    {time:'4pm-5pm',creators:'Scott Snyder & Matt Fraction',location:'DC Booth 4544',portal:true},
+    {time:'4pm-5pm',creators:'Olivia Dufault, Tim Seeley',location:'Ignition Press Booth 5531'},
+    {time:'4pm-5pm',creators:'Jason Fabok, Geoff Johns, Lamont Magee, Danny Miki, Maytal Zchut',location:'Image Comics/Skybound Booth 1915',notes:'Ghost Machine. Limit 10 books.'},
+    {time:'4pm-5:30pm',creators:'Selai Balkhi',location:'Sails Pavilion AA16',notes:'Detective Sanazu and the Magic Vest'},
+    {time:'4pm-5:30pm',creators:'Ruben Najera',location:'Sails Pavilion AA11',notes:'Calaguerra, TMNT'},
+    {time:'4pm-5pm',creators:'Briana Loewinsohn',location:'Fantagraphics Booth 1721',notes:'Raised By Ghosts'},
+    {time:'4pm-5:30pm',creators:'Sean Chen & Anderson Carman',location:'247 Comics Booth 1837',notes:'Evermind, Cyber League Baseball. 2pm-5:30pm combined.'},
+    {time:'4:30pm-5:30pm',creators:"Bryan Lee O'Malley",location:'Oni Press Booth 1829',notes:"Scott Pilgrim. 1 item, +1 with Scott Pilgrim purchase.",portal:true},
+    {time:'4:30pm-5:30pm',creators:'John Cusack',location:'Sails Pavilion AA04',notes:'Momo. No personal items. Must buy Momo at show.',portal:true},
+    {time:'5pm-5:45pm',creators:'Will Jack',location:'BOOM! Studios Booth 2229'},
+    {time:'5:30pm-6:30pm',creators:'Raina Telgemeier, Gale Galligan, Sara Amini, Joey Spiotto',location:'Sails Pavilion AA09',notes:'Graphix Unboxed'},
+    {time:'5:30pm-6:30pm',creators:'Dan Quintana',location:"Scott's Collectables Booth 2314",notes:'Cover Artist'},
+    {time:'6pm-6:45pm',creators:'J. Michael Straczynski',location:'Sails Pavilion AA16',notes:'Babylon 5, Sense8, Marvel. 2026 Special Guest.'},
+    {time:'7pm-12am',creators:'Lumpia Con',location:'Gaslamp Lumpia Factory (423 F Street)',notes:'Bobby Alcid Rubio 7-9pm; Doug Marcaida & AJ Rafael 9:30-11:30pm',offsite:true},
+    {time:'12pm-8pm',creators:'Ignition Pavilion',location:'San Diego Wine & Culinary Center',offsite:true},
+    {time:'Time TBA',creators:'Shinkiro',location:'UDON Entertainment Booth 100',notes:'Street Fighter, Resident Evil. Must make qualifying purchase at booth.'},
+    {time:'Time TBA',creators:'Tony Daniel',location:"P Dot's Comics 1017",notes:'DC, Teen Titans'},
+    {time:'Time TBA',creators:'Geof Darrow',location:'Flesk 5016',notes:'Shaolin Cowboy'},
+    {time:'Time TBA',creators:'Terry Dodson',location:'Flesk 5019',notes:'Harley Quinn, Uncanny X-Men'},
+    {time:'Time TBA',creators:'Alice Darrow',location:'Dark Horse Comics Booth 2615'},
+    {time:'Time TBA',creators:'Brandon T. Snider',location:'Prism Comics Booth 2144',notes:"Supergirl's Family Vacation"},
+  ],
+  sat: [
+    {time:'9:30am-11:30am',creators:'David Baron',location:'Artists Alley BB-03',notes:'Batman Who Laughs, Absolute Batman'},
+    {time:'10am-11am',creators:'HUSH 2',location:'DC Booth 4544',portal:true},
+    {time:'10am-11:30am',creators:'Dan Quintana',location:'Red Hood Comics 705',notes:'Absolute Batman. $30/item, limit 3 per person.'},
+    {time:'10am-11am',creators:'Skottie Young',location:'Image Comics/Skybound Booth 1915',notes:'Limit 5 books per person'},
+    {time:'10am-12pm',creators:'Bob Burden & Philip Nelson',location:'Antarctic Press 2309',notes:'Flaming Carrot, AxiCab'},
+    {time:'10am-11:30am',creators:'Adam Gorham & Phillip Kennedy Johnson',location:"Scott's Collectables Booth 2314",notes:'Infernal Hulk, Midnight Spider-Man'},
+    {time:'11am',creators:'Wendy and Richard Pini',location:'Prism Comics Booth 2144',notes:'ElfQuest'},
+    {time:'11am-12pm',creators:'Paul Levitz',location:'Sails Pavilion AA18',notes:'Legion of Super-Heroes. 2026 Special Guest.'},
+    {time:'11am-11:45am',creators:'Tini Howard',location:'BOOM! Studios Booth 2229'},
+    {time:'11am-12:30pm',creators:'Anderson Carman & MANIX',location:'247 Comics Booth 1837',notes:'Cyber League Baseball'},
+    {time:'11am-2pm',creators:'Mike Baron',location:'Big Man Comics 1705',notes:'The Punisher'},
+    {time:'11am-12pm',creators:'Desiree Proctor',location:'Fanbase Press O-03',notes:'Nuclear Power'},
+    {time:'11:30am-12:30pm',creators:'Jason Fabok & Geoff Johns',location:'Image Comics/Skybound Booth 1915',notes:'Ghost Machine. Limit 10 books.'},
+    {time:'12pm-1pm',creators:'Mathew Klickstein',location:'Fantagraphics Booth 1721'},
+    {time:'12pm-1pm',creators:'Ruben Najera',location:'Sails Pavilion AA13',notes:'Calaguerra, TMNT'},
+    {time:'12pm-1:30pm',creators:'Yoichi Nishikawa',location:'Nucleus / Gallery Nucleus Booth 2015',notes:'Studio Ghibli. Must purchase print or book. Limit 5 items.'},
+    {time:'12pm-2pm',creators:"James Tynion IV & Werther Dell'Edera",location:"Scott's Collectables Booth 2314",notes:'Something is Killing the Children, Exquisite Corpses'},
+    {time:'12pm-1pm',creators:'Cullen Bunn & Ande Parks',location:'Ignition Press Booth 5531'},
+    {time:'12:30pm-1:30pm',creators:'Christian Ward & John J. Pearson',location:'Ignition Press Booth 5531'},
+    {time:'12:30pm-1:30pm',creators:'Christian Ward & John J. Pearson',location:'Ignition Pavilion (Offsite)',notes:'The Patron signing',offsite:true},
+    {time:'1pm-2pm',creators:"Bryan Lee O'Malley",location:'Oni Press Booth 1829',notes:"Scott Pilgrim. 1 item, +1 with Scott Pilgrim purchase.",portal:true},
+    {time:'1pm-2pm',creators:'Drew Edwards',location:'Sails Pavilion AA16',notes:'Halloween Man'},
+    {time:'1pm-2:30pm',creators:'Todd McFarlane',location:'Sails Pavilion AA02',notes:'Spawn. No phones/cameras. 1 item max.',portal:true},
+    {time:'1pm-2pm',creators:'Chuck U',location:'IDW Booth 2729',notes:'Teenage Mutant Ninja Turtles'},
+    {time:'1pm-2pm',creators:'Truck Torrence',location:'100% Soft Booth 315'},
+    {time:'1:30pm-2:30pm',creators:'Joe Simko',location:'Titan Entertainment Booth 5537',notes:'CRANIACS, Garbage Pail Kids'},
+    {time:'2pm-3pm',creators:"DC's Metropolis",location:'DC Booth 4544',portal:true},
+    {time:'2pm-3pm',creators:'LeUyen Pham & Caspar Wijngaard',location:'Sails Pavilion AA03',notes:'What Is the Best Superpower?'},
+    {time:'2pm-3:30pm',creators:'Selai Balkhi',location:'Sails Pavilion AA16',notes:'Detective Sanazu and the Magic Vest'},
+    {time:'2pm-3:30pm',creators:'Howard Mackie',location:'Sails Pavilion AA12',notes:'Ghost Rider. 2026 Special Guest.'},
+    {time:'2pm-4pm',creators:'Lisa Burdige & John Hazard',location:'Sails Pavilion AA14',notes:'Background Noise'},
+    {time:'2pm-4pm',creators:'Philip Nelson',location:'Antarctic Press 2309',notes:'AxiCab'},
+    {time:'2pm-5pm',creators:'David Baron',location:'Artists Alley BB-03',notes:'Batman Who Laughs, Absolute Batman'},
+    {time:'2pm-3pm',creators:'Justin Giampoli',location:'Artists Alley EE-11',notes:'Westside: Volume 1'},
+    {time:'2pm-3:30pm',creators:'Olivia Dufault & Jamie S. Rich',location:'Ignition Press Booth 5531'},
+    {time:'2pm-3:30pm',creators:'Brian Buccellato & Lucas Lee-Garza',location:'247 Comics Booth 1837',notes:'Sons of the Devil, NEWMEN'},
+    {time:'2:30pm-3:30pm',creators:'Michael Walsh',location:"Scott's Collectables Booth 2314",notes:'Exquisite Corpses'},
+    {time:'2:30pm-4pm',creators:'Mike Baron',location:'Antarctic Press 2309',notes:'Nexus, Badger, The Punisher, The Flash'},
+    {time:'3pm-4pm',creators:"DC's ABSOLUTE",location:'DC Booth 4544',portal:true},
+    {time:'3pm-4pm',creators:'Jorge R. Gutierrez',location:'Sails Pavilion AA16',notes:'El Tigre, The Book of Life'},
+    {time:'3pm-3:45pm',creators:'Jonboy Meyers',location:'BOOM! Studios Booth 2229'},
+    {time:'3pm',creators:'Tehani Farr',location:'Stranger Comics 2307',notes:'The Stranger. Limited-edition Collection Card.'},
+    {time:'3pm-4pm',creators:'Aimee Garcia and AJ Mendez',location:'TBA'},
+    {time:'3:30pm-4:30pm',creators:"Bryan Lee O'Malley",location:'Oni Press Booth 1829',notes:'Scott Pilgrim. 1 item, +1 with Scott Pilgrim purchase.'},
+    {time:'3:30pm-4:30pm',creators:'Christian Ward',location:'Oni-Lion Forge Booth 1829',notes:'Forever Home ashcan'},
+    {time:'4pm-5pm',creators:'Marc Bernardin',location:'Neon Ichiban 2314'},
+    {time:'4pm-5pm',creators:'Tini Howard & Rob Guillory',location:'Ignition Press Booth 5531'},
+    {time:'4pm-5:30pm',creators:'Anderson Carman, Terry Kavanagh & Howard Mackie',location:'247 Comics Booth 1837'},
+    {time:'4:30pm-5:30pm',creators:"Bryan Lee O'Malley",location:'Oni Press Booth 1829',notes:"Scott Pilgrim. 1 item, +1 with Scott Pilgrim purchase.",portal:true},
+    {time:'4:30pm-5:30pm',creators:'Frank Miller',location:'Sails Pavilion AA10',notes:'Signing Push the Wall only. No personal items. No photos.',portal:true},
+    {time:'5pm-6pm',creators:'Jason Fabok, Lamont Magee, Danny Miki, Maytal Zchut',location:'Image Comics/Skybound Booth 1915',notes:'Ghost Machine. Limit 10 books.'},
+    {time:'5:15pm-6:15pm',creators:"James Tynion IV & Werther Dell'edera",location:'BOOM! Studios Booth 2229'},
+    {time:'5:30pm-6:30pm',creators:'Rafael Grampa',location:"Scott's Collectables Booth 2314",notes:'Batman: Gargoyle of Gotham'},
+    {time:'7:30pm-10pm',creators:'James Tynion IV, Michael Walsh, Tyler Boss, Christian Ward',location:'Now or Never Comics (1055 F Street)',notes:"Corpse Tour '26 — Exquisite Corpses. $5 signing ticket. 18+.",offsite:true},
+    {time:'12pm-8pm',creators:'Ignition Pavilion',location:'San Diego Wine & Culinary Center',offsite:true},
+    {time:'Time TBA',creators:'Shinkiro',location:'UDON Entertainment Booth 100',notes:'Street Fighter, Resident Evil. Must make qualifying purchase.'},
+    {time:'Time TBA',creators:'Geof Darrow',location:'Flesk 5016',notes:'Shaolin Cowboy'},
+    {time:'Time TBA',creators:'Terry Dodson',location:'Flesk 5019',notes:'Harley Quinn, Uncanny X-Men'},
+    {time:'Time TBA',creators:'Wes Craig',location:'Felix Comic Art 4612 & Image 1915',notes:'Kaya'},
+    {time:'Time TBA',creators:'Brandon T. Snider',location:'Prism Comics Booth 2144',notes:"Supergirl's Family Vacation"},
+  ],
+  sun: [
+    {time:'10am-11am',creators:'Frank Miller',location:'Sails Pavilion AA25',notes:'1 personal item. No posed photos.',portal:true},
+    {time:'10am-11am',creators:'Todd McFarlane',location:'Sails Pavilion AA02',notes:'Spawn. No phones/cameras. 1 item max.',portal:true},
+    {time:'10am-11:30am',creators:'Yael ENIVEL',location:'Sails Pavilion AA16',notes:'The French Elk'},
+    {time:'10am-12pm',creators:'Lisa Burdige & John Hazard',location:'Sails Pavilion AA14',notes:'Background Noise'},
+    {time:'10am-11:30am',creators:'Dan Quintana',location:'Red Hood Comics 705',notes:'Absolute Batman. $30/item, limit 3 per person.'},
+    {time:'10:30am-12pm',creators:'Anderson Carman & Lucas Lee-Garza',location:'247 Comics Booth 1837',notes:'Cyber League Baseball, NEWMEN'},
+    {time:'10:30am-11:30am',creators:'Chris Condon',location:"Scott's Collectables Booth 2314",notes:'Of the Earth, That Texas Blood'},
+    {time:'11am-12pm',creators:"Bryan Lee O'Malley",location:'Oni Press Booth 1829',notes:"Scott Pilgrim. 1 item, +1 with Scott Pilgrim purchase.",portal:true},
+    {time:'11am-11:30am',creators:'Joe Simko',location:'CGC 5500',notes:'CRANIACS. Free signing.'},
+    {time:'11am-12pm',creators:'Justin Giampoli',location:'Artists Alley EE-11',notes:'Westside: Volume 1'},
+    {time:'11am-12pm',creators:'Desiree Proctor',location:'Fanbase Press O-03',notes:'Nuclear Power'},
+    {time:'11:30am-12:30pm',creators:'Raina Telgemeier & Gale Galligan',location:'Sails Pavilion AA03',notes:'Baby-Sitters Club at 40'},
+    {time:'11:30am-12:30pm',creators:'Julio Anta, Mika Song, Barbara Perez Marquez, Stephen Shaskan, Trung Le Nguyen',location:'Sails Pavilion AA04',notes:'Graphic Novel Storytelling panel'},
+    {time:'12pm-1pm',creators:'Rafael Grampa',location:"Scott's Collectables Booth 2314",notes:'Batman: Gargoyle of Gotham'},
+    {time:'12pm-1pm',creators:'Drew Edwards',location:'Sails Pavilion AA16',notes:'Halloween Man'},
+    {time:'12pm-1:30pm',creators:'Howard Mackie',location:'Sails Pavilion AA17',notes:'Ghost Rider. 2026 Special Guest.'},
+    {time:'12pm-1pm',creators:'Jeremy Haun, Danny Luckert, Jamie S. Rich',location:'Ignition Press Booth 5531'},
+    {time:'12pm-6pm',creators:'Ignition Pavilion',location:'San Diego Wine & Culinary Center',offsite:true},
+    {time:'12:30pm-1:30pm',creators:'Dan Santat, Jennifer Lee, LeUyen Pham, Gene Luen Yang',location:'Sails Pavilion AA06',notes:'The Art of Graphic Novels'},
+    {time:'1pm-2pm',creators:"Werther Dell'Edera & James Tynion IV",location:"Scott's Collectables Booth 2314",notes:'Something is Killing the Children'},
+    {time:'1pm-2:30pm',creators:'Ruben Najera',location:'Sails Pavilion AA25',notes:'Calaguerra, TMNT'},
+    {time:'1:30pm-3pm',creators:'Selai Balkhi',location:'Sails Pavilion AA16',notes:'Detective Sanazu and the Magic Vest'},
+    {time:'2pm',creators:'Wendy and Richard Pini',location:'Dark Horse Comics Booth 2615',notes:'ElfQuest'},
+    {time:'2pm-3pm',creators:'Jeff Smith',location:'Sails Pavilion AA15',notes:'BONE, RASL, TUKI. 2026 Special Guest.'},
+    {time:'2pm-3pm',creators:'Briana Loewinsohn',location:'Fantagraphics Booth 1721',notes:'Raised By Ghosts'},
+    {time:'2pm-3pm',creators:'Leah Williams & Stephanie Williams',location:'Ignition Press Booth 5531'},
+    {time:'2pm-3pm',creators:'Andrew K. Currey',location:'BOOM! Studios Booth 2229'},
+    {time:'2pm-5pm',creators:'David Baron',location:'Artists Alley BB-03',notes:'Batman Who Laughs, Absolute Batman'},
+    {time:'2:30pm-3:30pm',creators:'Gemma Correll',location:'Sails Pavilion AA10',notes:'ANXIETYLAND — How Comics Help Us Talk About Mental Health'},
+    {time:'3pm',creators:'Tehani Farr',location:'Stranger Comics 2307',notes:'The Stranger. Limited-edition Collection Card.'},
+    {time:'3pm-4pm',creators:'Barbara "Willy" Mendes',location:'Fantagraphics Booth 1721'},
+    {time:'4pm-5pm',creators:'Taylor Grothe, Deena Helm, CJ Leede, Chuck Tingle, Mathilda Zeller',location:'Sails Pavilion AA09',notes:'Anatomy of Fear: 5 Years of Nightfire'},
+    {time:'4pm-5pm',creators:'Cullen Bunn & Tim Seeley',location:'Ignition Press Booth 5531'},
+    {time:'12pm-1pm',creators:'Julie Fiveash',location:'Prism Comics Booth 2144',notes:'The Froggy Library'},
+    {time:'Time TBA',creators:'Shinkiro',location:'UDON Entertainment Booth 100',notes:'Street Fighter, Resident Evil. Must make qualifying purchase.'},
+    {time:'Time TBA',creators:'Geoff Darrow',location:'Flesk 5019',notes:'Shaolin Cowboy'},
+    {time:'Time TBA',creators:'Terry Dodson',location:'Flesk 5019',notes:'Harley Quinn, Uncanny X-Men'},
+    {time:'Time TBA',creators:'Wes Craig',location:'Felix Comic Art Booth 4612',notes:'Kaya'},
+  ],
+  tba: [
+    {time:'Dates & Times TBA',creators:'Brett Bean, Marguerite Bennett, Rose Besch, Mark Brooks, Frank Cho, Tony Fleece, Javi Fernandez, Mitch Gerads, GODTAIL, Kyle Higgins, Tom King, Andy Kubert, Clay Mann, Ryan Ottley, Belen Ortega, Dan Panosian, Gabriel Piccolo, Pornsak Pichetshote, Satoshi Shiki, Hayden Sherman, Scott Snyder, Tom Taylor, Chip Zdarsky',location:'Comic Sketch Art Booth 4901/4903'},
+    {time:'Dates & Times TBA',creators:'Arthur Adams, Rafael Albuquerque, Eric Canete, Joyce Chin, Denys Cowan, Paul Dini, David Finch, Cully Hamner, Jeph Loeb',location:'Essential Sequential Booth 4601',notes:'Signature prices vary per creator. Check booth.'},
+    {time:'Dates & Times TBA',creators:'Rafael Albuquerque, Jeremy Adams, Nick Dragotta, Javi Fernandez, Matt Fraction, Rafael Grampa, Che Grayson, Morgan Hampton, Kyle Higgins, Jim Lee, Nicole Maines, Belen Ortega, Pornsak Pichetshote, Scott Snyder, Tom Taylor, Mark Waid, G. Willow Wilson, Stephanie Williams, Joshua Williamson',location:'DC Booth 4544'},
+    {time:'Dates & Times TBA',creators:'Boxerbun, Scott C., Joey Chou, Indietoy, Sara Kipin',location:'Nucleus / Gallery Nucleus Booth 2015'},
+    {time:'Dates & Times TBA',creators:'Tradd Moore',location:'Oni-Lion Forge Booth 1829',notes:'Touch Me Someplace Nowhere. Free 9x12 art print while supplies last.'},
+    {time:'Dates & Times TBA',creators:'Jim Lee',location:'Torpedo Comics Booth 1000/821',notes:'DC President. 2026 Special Guest.'},
+    {time:'Dates & Times TBA',creators:'Ricardo Delgado',location:'Booth TBA',notes:'Age of Reptiles'},
+    {time:'Dates & Times TBA',creators:'David Mack & William Katt',location:'Booth TBA',notes:'The Greatest American Hero'},
+    {time:'Dates & Times TBA',creators:'David Nakayama',location:'Unknown Comics 1001'},
+    {time:'Dates & Times TBA',creators:'Lucio Parrillo & Natali Sanders',location:'KRS Comics 734'},
+    {time:'Dates & Times TBA',creators:'Pornsak Pichetshote & Rafael Albuquerque',location:'Booth TBA'},
+    {time:'Dates & Times TBA',creators:'Matthew Rosenberg',location:'Booth TBA',notes:'If Destruction Be Our Lot, Spawn'},
+    {time:'Dates & Times TBA',creators:'Mike Schwartz',location:'Clover Press 5563',notes:'Armored'},
+    {time:'Dates & Times TBA',creators:'Jenny Blake',location:'Prism Comics Booth 2144',notes:'Black Lightning'},
+    {time:'Dates & Times TBA',creators:'Cullen Bunn & Jeremy Haun',location:'Ignition Pavilion (Offsite)',notes:'Cult-de-Sac, The Folk of Dooney Hollow',offsite:true},
+    {time:'E.M. Gist — July 23-26',creators:'E.M. Gist',location:'Trinity Comics Booth 5553'},
+  ]
+};
+
+const DAY_LABELS = {
+  wed:{label:'Wednesday',date:'July 22'},
+  thu:{label:'Thursday',date:'July 23'},
+  fri:{label:'Friday',date:'July 24'},
+  sat:{label:'Saturday',date:'July 25'},
+  sun:{label:'Sunday',date:'July 26'},
+  tba:{label:'TBA',date:'Dates & Times TBA'}
+};
+
+let lastRefreshed = new Date();
+
+function signingHTML(s) {
+  const portalBadge = s.portal ? '<span class="badge-section badge-portal">Portal</span>' : '';
+  const offsiteBadge = s.offsite ? '<span class="badge-section badge-offsite">Offsite</span>' : '';
+  return `<div class="signing-card">
+    <div class="signing-time">${s.time}</div>
+    <div class="signing-body">
+      <div class="signing-creators">${s.creators}${portalBadge}${offsiteBadge}</div>
+      <div class="signing-location">${s.location}</div>
+      ${s.notes ? `<div class="signing-notes">${s.notes}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderDay(dayKey) {
+  const signings = SIGNINGS[dayKey] || [];
+  const {label, date} = DAY_LABELS[dayKey];
+  return `<div class="day-block">
+    <div class="day-header"><span>${label}</span><span class="day-date">${date}</span></div>
+    ${signings.map(s => signingHTML(s)).join('')}
+  </div>`;
+}
+
+function renderAll() {
+  document.getElementById('tab-all').innerHTML = ['wed','thu','fri','sat','sun','tba'].map(d => renderDay(d)).join('');
+  ['wed','thu','fri','sat','sun','tba'].forEach(d => {
+    document.getElementById('tab-'+d).innerHTML = renderDay(d);
+  });
+  document.getElementById('updated-time').textContent = 'Last rendered: ' + lastRefreshed.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+}
+
+function switchTab(name) {
+  const names = ['all','wed','thu','fri','sat','sun','tba','search'];
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i]===name));
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+}
+
+function doSearch() {
+  const q = document.getElementById('search-input').value.toLowerCase().trim();
+  const el = document.getElementById('search-results');
+  if (!q) { el.innerHTML = '<div class="empty">Start typing to search signings.</div>'; return; }
+  const results = [];
+  Object.entries(SIGNINGS).forEach(([day, signings]) => {
+    signings.forEach(s => {
+      if (s.creators.toLowerCase().includes(q) || (s.location||'').toLowerCase().includes(q) || (s.notes||'').toLowerCase().includes(q)) {
+        results.push({...s, day});
+      }
+    });
+  });
+  if (!results.length) { el.innerHTML = '<div class="empty">No results found.</div>'; return; }
+  const byDay = {};
+  results.forEach(r => { if(!byDay[r.day])byDay[r.day]=[]; byDay[r.day].push(r); });
+  el.innerHTML = Object.entries(byDay).map(([day, items]) => {
+    const {label, date} = DAY_LABELS[day];
+    return `<div class="day-block"><div class="day-header"><span>${label}</span><span class="day-date">${date}</span></div>${items.map(s => signingHTML(s)).join('')}</div>`;
+  }).join('');
+}
+
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-results').innerHTML = '<div class="empty">Start typing to search signings.</div>';
+}
+
+function refreshData() {
+  const btn = document.getElementById('refresh-btn');
+  btn.textContent = 'Refreshing...';
+  btn.classList.add('loading');
+  lastRefreshed = new Date();
+  renderAll();
+  setTimeout(() => { btn.textContent = '\u21BB Refresh'; btn.classList.remove('loading'); }, 800);
+}
+
+renderAll();
+</script>
+</body>
+</html>
