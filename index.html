@@ -718,8 +718,20 @@ function signingHTML(s) {
   </div>`;
 }
 
+function parseTime(timeStr) {
+  // Extract first time from range like '10am-11am' or '10:30am-11:30am' or 'Time TBA'
+  const m = timeStr.match(/(\d+)(?::(\d+))?(am|pm)/i);
+  if (!m) return 9999; // TBA goes to end
+  let h = parseInt(m[1]);
+  const min = m[2] ? parseInt(m[2]) : 0;
+  const ampm = m[3].toLowerCase();
+  if (ampm === 'pm' && h !== 12) h += 12;
+  if (ampm === 'am' && h === 12) h = 0;
+  return h * 60 + min;
+}
+
 function renderDay(dayKey) {
-  const signings = SIGNINGS[dayKey] || [];
+  const signings = (SIGNINGS[dayKey] || []).slice().sort((a,b) => parseTime(a.time) - parseTime(b.time));
   const {label, date} = DAY_LABELS[dayKey];
   return `<div class="day-block">
     <div class="day-header"><span>${label}</span><span class="day-date">${date}</span></div>
